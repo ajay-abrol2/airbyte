@@ -58,24 +58,25 @@ class PostgresDestination :
         // Adding 60 seconds to connection timeout, for ssl connections, default 10 seconds is not
         // enough
 
-        return builder
-            .withConnectionTimeout(Duration.ofSeconds(60))
-            .withConnectionInitSql(
-                """
-                               CREATE OR REPLACE FUNCTION pg_temp.airbyte_safe_cast(_in text, INOUT _out ANYELEMENT)
+            /* return builder.withConnectionTimeout(Duration.ofSeconds(60))
+        .withConnectionInitSql("""
+                               CREATE FUNCTION pg_temp.airbyte_safe_cast(_in text, INOUT _out ANYELEMENT)
                                  LANGUAGE plpgsql AS
-                               ${'$'}func${'$'}
+                               $func$
                                BEGIN
-                                 EXECUTE format('SELECT %L::%s', ${'$'}1, pg_typeof(_out))
+                                 EXECUTE format('SELECT %L::%s', $1, pg_typeof(_out))
                                  INTO  _out;
                                EXCEPTION WHEN others THEN
                                  -- do nothing: _out already carries default
                                END
-                               ${'$'}func${'$'};
-                               
-                               """.trimIndent()
-            )
-    }
+                               $func$;
+                               """); */
+    return builder.withConnectionTimeout(Duration.ofSeconds(60))
+            .withConnectionInitSql("""
+                               Select 1;
+                               """);
+
+  }
 
     public override fun getDefaultConnectionProperties(config: JsonNode): Map<String, String> {
         val additionalParameters: MutableMap<String, String> = HashMap()
