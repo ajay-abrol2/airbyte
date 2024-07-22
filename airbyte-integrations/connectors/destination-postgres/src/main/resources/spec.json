@@ -23,8 +23,8 @@
         "type": "integer",
         "minimum": 0,
         "maximum": 65536,
-        "default": 5432,
-        "examples": ["5432"],
+        "default": 5433,
+        "examples": ["5433"],
         "order": 1
       },
       "database": {
