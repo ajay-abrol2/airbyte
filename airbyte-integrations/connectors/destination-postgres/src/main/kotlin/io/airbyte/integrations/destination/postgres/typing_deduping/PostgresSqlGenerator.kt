@@ -360,7 +360,7 @@ class PostgresSqlGenerator(namingTransformer: NamingConventionTransformer, casca
     companion object {
         @JvmField
         val JSONB_TYPE: DataType<Any> =
-            DefaultDataType(SQLDialect.POSTGRES, Any::class.java, "jsonb")
+            DefaultDataType(SQLDialect.POSTGRES, Any::class.java, "json")
 
         const val CASE_STATEMENT_SQL_TEMPLATE: String = "CASE WHEN {0} THEN {1} ELSE {2} END "
 
