@@ -37,8 +37,8 @@
         "title": "Default Schema",
         "description": "The default schema tables are written to if the source does not specify a namespace. The usual value for this field is \"public\".",
         "type": "string",
-        "examples": ["store"],
-        "default": "store",
+        "examples": ["public"],
+        "default": "public",
         "order": 3
       },
       "username": {
