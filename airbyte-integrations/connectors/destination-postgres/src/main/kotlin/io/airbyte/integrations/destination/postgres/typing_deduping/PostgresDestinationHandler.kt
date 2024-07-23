@@ -35,7 +35,7 @@ class PostgresDestinationHandler(
         return when (airbyteType.typeName) {
             Struct.TYPE,
             UnsupportedOneOf.TYPE,
-            Array.TYPE -> "json"
+            Array.TYPE -> "jsonb"
             Union.TYPE -> toJdbcTypeName((airbyteType as Union).chooseType())
             else -> throw IllegalArgumentException("Unsupported AirbyteType: $airbyteType")
         }
@@ -64,7 +64,7 @@ class PostgresDestinationHandler(
             AirbyteProtocolType.TIME_WITH_TIMEZONE -> "timetz"
             AirbyteProtocolType.TIME_WITHOUT_TIMEZONE -> "time"
             AirbyteProtocolType.DATE -> "date"
-            AirbyteProtocolType.UNKNOWN -> "json"
+            AirbyteProtocolType.UNKNOWN -> "jsonb"
         }
     }
 
