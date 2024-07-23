@@ -22,7 +22,7 @@ import org.postgresql.core.BaseConnection
 
 class PostgresSqlOperations : JdbcSqlOperations() {
     override fun postCreateTableQueries(schemaName: String?, tableName: String?): List<String> {
-        return if (isDestinationV2) {
+        return  emptyList() /* if (isDestinationV2) {
             java.util.List.of( // the raw_id index _could_ be unique (since raw_id is a UUID)
                 // but there's no reason to do that (because it's a UUID :P )
                 // and it would just slow down inserts.
@@ -55,7 +55,7 @@ class PostgresSqlOperations : JdbcSqlOperations() {
             )
         } else {
             emptyList()
-        }
+        } */
     }
 
     @Throws(Exception::class)
