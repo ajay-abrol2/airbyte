@@ -62,7 +62,33 @@ class PostgresSqlOperations(useDropCascade: Boolean) : JdbcSqlOperations() {
             emptyList()
         } */
     }
-
+    override fun createTableQueryV2(schemaName: String?, tableName: String?): String {
+        // Note that Meta is the last column in order, there was a time when tables didn't have
+        // meta,
+        // we issued Alter to add that column so it should be the last column.
+        return String.format(
+            """
+        CREATE TABLE IF NOT EXISTS %s.%s (
+          %s VARCHAR PRIMARY KEY,
+          %s VARCHAR(65000),
+          %s TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+          %s TIMESTAMP WITH TIME ZONE DEFAULT NULL,
+          %s VARCHAR(65000),
+          %s BIGINT
+     
+        );
+        
+        """.trimIndent(),
+            schemaName,
+            tableName,
+            JavaBaseConstants.COLUMN_NAME_AB_RAW_ID,
+            JavaBaseConstants.COLUMN_NAME_DATA,
+            JavaBaseConstants.COLUMN_NAME_AB_EXTRACTED_AT,
+            JavaBaseConstants.COLUMN_NAME_AB_LOADED_AT,
+            JavaBaseConstants.COLUMN_NAME_AB_META,
+            JavaBaseConstants.COLUMN_NAME_AB_GENERATION_ID,
+        )
+    }
     @Throws(Exception::class)
     override fun insertRecordsInternalV2(
         database: JdbcDatabase,
@@ -109,12 +135,14 @@ class PostgresSqlOperations(useDropCascade: Boolean) : JdbcSqlOperations() {
             var tmpFile: File? = null
             try {
                 tmpFile = Files.createTempFile("$tmpTableName-", ".tmp").toFile()
-                writeBatchToFile(tmpFile, records, syncId, generationId)
+                //Added new delimiter for Vertica
+                writeBatchToFileVF(tmpFile, records, syncId, generationId)
 
                 val copyManager = CopyManager(connection.unwrap(BaseConnection::class.java))
+                //update copy statement as per Vertica
                 val sql =
                     String.format(
-                        "COPY %s.%s (%s) FROM stdin DELIMITER ',' CSV",
+                        "COPY %s.%s (%s) FROM stdin DELIMITER '|' ",
                         schemaName,
                         tmpTableName,
                         orderedColumnNames
@@ -137,6 +165,51 @@ class PostgresSqlOperations(useDropCascade: Boolean) : JdbcSqlOperations() {
         LOGGER.info { "COPY command completed sucessfully" }
     }
 
+    @Throws(Exception::class)
+    private fun writeBatchToFileVF(
+        tmpFile: File?,
+        records: List<PartialAirbyteMessage>,
+        syncId: Long,
+        generationId: Long
+    ) {
+        PrintWriter(tmpFile, StandardCharsets.UTF_8).use { writer ->
+            CSVPrinter(writer, CSVFormat.newFormat('|')).use { csvPrinter ->
+                for (record in records) {
+                    val uuid = UUID.randomUUID().toString()
+
+                    val jsonData = record.serialized
+                    val airbyteMeta =
+                        if (record.record!!.meta == null) {
+                            """{"changes":[],${JavaBaseConstants.AIRBYTE_META_SYNC_ID_KEY}":$syncId}"""
+                        } else {
+                            Jsons.serialize(
+                                record.record!!
+                                    .meta!!
+                                    .withAdditionalProperty(
+                                        JavaBaseConstants.AIRBYTE_META_SYNC_ID_KEY,
+                                        syncId,
+                                    )
+                            )
+                        }
+                    val extractedAt =
+                        Timestamp.from(Instant.ofEpochMilli(record.record!!.emittedAt))
+                    if (isDestinationV2) {
+                        csvPrinter.printRecord(
+                            uuid,
+                            jsonData,
+                            extractedAt,
+                            null,
+                            airbyteMeta,
+                            generationId
+                        )
+                    } else {
+                        csvPrinter.printRecord(uuid, jsonData, extractedAt)
+                    }
+                }
+            }
+        }
+    }
+    
     override fun overwriteRawTable(database: JdbcDatabase, rawNamespace: String, rawName: String) {
         val tmpName = rawName + AbstractStreamOperation.TMP_TABLE_SUFFIX
         database.executeWithinTransaction(
