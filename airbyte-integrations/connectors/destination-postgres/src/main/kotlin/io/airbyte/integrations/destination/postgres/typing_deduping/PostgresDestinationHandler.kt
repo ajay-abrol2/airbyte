@@ -38,7 +38,7 @@ class PostgresDestinationHandler(
         return when (airbyteType.typeName) {
             Struct.TYPE,
             UnsupportedOneOf.TYPE,
-            Array.TYPE -> "jsonb"
+            Array.TYPE -> "long varbinary" //rename jsonb to long varbinary for vertica
             Union.TYPE -> toJdbcTypeName((airbyteType as Union).chooseType())
             else -> throw IllegalArgumentException("Unsupported AirbyteType: $airbyteType")
         }
@@ -69,7 +69,7 @@ class PostgresDestinationHandler(
             AirbyteProtocolType.TIME_WITH_TIMEZONE -> "timetz"
             AirbyteProtocolType.TIME_WITHOUT_TIMEZONE -> "time"
             AirbyteProtocolType.DATE -> "date"
-            AirbyteProtocolType.UNKNOWN -> "jsonb"
+            AirbyteProtocolType.UNKNOWN -> "Long Varbinary" //rename JSONB to Long Varbinary for Vertica
         }
     }
 
