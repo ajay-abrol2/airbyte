@@ -7,6 +7,7 @@ from __future__ import annotations
 import importlib
 import inspect
 import re
+from functools import partial
 from typing import Any, Callable, Dict, List, Mapping, Optional, Type, Union, get_args, get_origin, get_type_hints
 
 from airbyte_cdk.models import FailureType, Level
@@ -30,6 +31,7 @@ from airbyte_cdk.sources.declarative.extractors import DpathExtractor, RecordFil
 from airbyte_cdk.sources.declarative.extractors.record_filter import ClientSideIncrementalRecordFilterDecorator
 from airbyte_cdk.sources.declarative.extractors.record_selector import SCHEMA_TRANSFORMER_TYPE_MAPPING
 from airbyte_cdk.sources.declarative.incremental import (
+    ChildPartitionResumableFullRefreshCursor,
     CursorFactory,
     DatetimeBasedCursor,
     DeclarativeCursor,
@@ -701,12 +703,15 @@ class ModelToComponentFactory:
             )
         elif model.incremental_sync:
             return self._create_component_from_model(model=model.incremental_sync, config=config) if model.incremental_sync else None
-        elif hasattr(model.retriever, "paginator") and model.retriever.paginator and not stream_slicer:
-            # To incrementally deliver RFR for low-code we're first implementing this for streams that do not use
-            # nested state like substreams or those using list partition routers
-            return ResumableFullRefreshCursor(parameters={})
         elif stream_slicer:
-            return stream_slicer
+            # For the Full-Refresh sub-streams, we use the nested `ChildPartitionResumableFullRefreshCursor`
+            return PerPartitionCursor(
+                cursor_factory=CursorFactory(create_function=partial(ChildPartitionResumableFullRefreshCursor, {})),
+                partition_router=stream_slicer,
+            )
+        elif hasattr(model.retriever, "paginator") and model.retriever.paginator and not stream_slicer:
+            # For the regular Full-Refresh streams, we use the high level `ResumableFullRefreshCursor`
+            return ResumableFullRefreshCursor(parameters={})
         else:
             return None
 
@@ -1030,7 +1035,7 @@ class ModelToComponentFactory:
         self,
         model: RecordSelectorModel,
         config: Config,
-        decoder: Optional[Decoder],
+        decoder: Optional[Decoder] = None,
         *,
         transformations: List[RecordTransformation],
         client_side_incremental_sync: Optional[Dict[str, Any]] = None,
@@ -1196,7 +1201,13 @@ class ModelToComponentFactory:
 
     @staticmethod
     def create_wait_time_from_header(model: WaitTimeFromHeaderModel, config: Config, **kwargs: Any) -> WaitTimeFromHeaderBackoffStrategy:
-        return WaitTimeFromHeaderBackoffStrategy(header=model.header, parameters=model.parameters or {}, config=config, regex=model.regex)
+        return WaitTimeFromHeaderBackoffStrategy(
+            header=model.header,
+            parameters=model.parameters or {},
+            config=config,
+            regex=model.regex,
+            max_waiting_time_in_seconds=model.max_waiting_time_in_seconds if model.max_waiting_time_in_seconds is not None else None,
+        )
 
     @staticmethod
     def create_wait_until_time_from_header(
