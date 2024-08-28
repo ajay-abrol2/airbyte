@@ -85,7 +85,8 @@ class PostgresSqlGenerator(namingTransformer: NamingConventionTransformer, casca
         val finalTableName = DSL.name(stream.id.finalNamespace, stream.id.finalName + suffix)
 
         statements.add(super.createTable(stream, suffix, force))
-
+        // commented index because vertica doesnot support
+        /*
         if (stream.postImportAction == ImportType.DEDUPE) {
             // An index for our ROW_NUMBER() PARTITION BY pk ORDER BY cursor, extracted_at function
             val pkNames =
@@ -131,7 +132,7 @@ class PostgresSqlGenerator(namingTransformer: NamingConventionTransformer, casca
                     .on(finalTableName, DSL.name(JavaBaseConstants.COLUMN_NAME_AB_RAW_ID))
                     .getSQL()
             )
-        )
+        ) */
 
         return concat(statements)
     }
@@ -187,7 +188,10 @@ class PostgresSqlGenerator(namingTransformer: NamingConventionTransformer, casca
             // string.
             // '{}' is an empty json path (it's an empty array literal), so it just stringifies the
             // json value.
-            return DSL.field("{0} #>> '{}'", String::class.java, field)
+            // Commented Postgres Code and adding Vertica specific code
+
+            //return DSL.field("{0} #>> '{}'", String::class.java, field)
+            return DSL.field("{0}", String::class.java, field)
         } else {
             val dialectType = toDialectType(type)
             // jsonb can't directly cast to most types, so convert to text first.
@@ -195,7 +199,9 @@ class PostgresSqlGenerator(namingTransformer: NamingConventionTransformer, casca
             val extractAsText =
                 DSL.case_()
                     .`when`(
-                        field.isNull().or(jsonTypeof(field).eq("null")),
+                        //remove jsontypeof function for Vertica
+                        //field.isNull().or(jsonTypeof(field).eq("null")),
+                        field.isNull(),
                         DSL.`val`(null as String?)
                     )
                     .else_(DSL.cast(field, SQLDataType.VARCHAR))
@@ -223,6 +229,12 @@ class PostgresSqlGenerator(namingTransformer: NamingConventionTransformer, casca
     private fun jsonBuildObject(vararg arguments: Field<*>): Field<*> {
         return DSL.function("JSONB_BUILD_OBJECT", JSONB_TYPE, *arguments)
     }
+
+    //Added new function which support vertica
+    private fun jsonBuildObjectVF(vararg arguments: Field<*>): Field<*> {
+        return DSL.function("", JSONB_TYPE, *arguments)
+    }
+
 
     override fun buildAirbyteMetaColumn(columns: LinkedHashMap<ColumnId, AirbyteType>): Field<*> {
         val dataFieldErrors =
@@ -255,13 +267,21 @@ class PostgresSqlGenerator(namingTransformer: NamingConventionTransformer, casca
                 "{0}#>'{${JavaBaseConstants.AIRBYTE_META_SYNC_ID_KEY}}'",
                 DSL.field(DSL.name(JavaBaseConstants.COLUMN_NAME_AB_META))
             )
-        return jsonBuildObject(
+        // commented code for Vertica  
+        /* return jsonBuildObject(
                 DSL.`val`(AB_META_COLUMN_CHANGES_KEY),
                 DSL.field("ARRAY_CAT({0}, {1})", finalTableChangesArray, rawTableChangesArray),
                 DSL.`val`(JavaBaseConstants.AIRBYTE_META_SYNC_ID_KEY),
                 syncId
             )
-            .`as`(JavaBaseConstants.COLUMN_NAME_AB_META)
+            .`as`(JavaBaseConstants.COLUMN_NAME_AB_META) */
+           return jsonBuildObjectVF(
+               //DSL.`val`(AB_META_COLUMN_CHANGES_KEY),
+                DSL.field(DSL.name(JavaBaseConstants.COLUMN_NAME_AB_META))
+                //DSL.field("ARRAY_CAT({0}, {1})", finalTableChangesArray, rawTableChangesArray)
+           )
+           .`as`(JavaBaseConstants.COLUMN_NAME_AB_META)
+
     }
 
     private fun nulledChangeObject(fieldName: String): Field<*> {
@@ -347,7 +367,9 @@ class PostgresSqlGenerator(namingTransformer: NamingConventionTransformer, casca
     /** Extract a raw field, leaving it as jsonb */
     private fun extractColumnAsJson(column: ColumnId): Field<Any> {
         return DSL.field(
-            "{0} -> {1}",
+            /** Extract raw feild from JSON data of Vertica */
+            //"{0} -> {1}", 
+            "CAST(public.MapLookup( public.MapJSONExtractor({0}), {1}) as varchar)",
             DSL.name(JavaBaseConstants.COLUMN_NAME_DATA),
             DSL.`val`(column.originalName)
         )
@@ -360,7 +382,7 @@ class PostgresSqlGenerator(namingTransformer: NamingConventionTransformer, casca
     companion object {
         @JvmField
         val JSONB_TYPE: DataType<Any> =
-            DefaultDataType(SQLDialect.POSTGRES, Any::class.java, "jsonb")
+            DefaultDataType(SQLDialect.POSTGRES, Any::class.java, "varchar(65000)")
 
         const val CASE_STATEMENT_SQL_TEMPLATE: String = "CASE WHEN {0} THEN {1} ELSE {2} END "
 
