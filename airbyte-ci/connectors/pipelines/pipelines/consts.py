@@ -10,6 +10,7 @@ from dagger import Platform
 
 PYPROJECT_TOML_FILE_PATH = "pyproject.toml"
 MANIFEST_FILE_PATH = "manifest.yaml"
+COMPONENTS_FILE_PATH = "components.py"
 LICENSE_SHORT_FILE_PATH = "LICENSE_SHORT"
 CONNECTOR_TESTING_REQUIREMENTS = [
     "pip==21.3.1",
@@ -69,6 +70,8 @@ MANUAL_PIPELINE_STATUS_CHECK_OVERRIDE_PREFIXES = ["Regression Tests"]
 
 PUBLISH_UPDATES_SLACK_CHANNEL = "#connector-publish-updates"
 PUBLISH_FAILURE_SLACK_CHANNEL = "#connector-publish-failures"
+# TODO this should be passed via an env var or a CLI input
+PATH_TO_LOCAL_CDK = "../airbyte-python-cdk"
 
 
 class CIContext(str, Enum):
