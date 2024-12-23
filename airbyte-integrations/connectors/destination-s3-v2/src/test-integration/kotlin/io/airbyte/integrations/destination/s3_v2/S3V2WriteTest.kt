@@ -25,6 +25,7 @@ abstract class S3V2WriteTest(
     commitDataIncrementally: Boolean = true,
     allTypesBehavior: AllTypesBehavior,
     nullEqualsUnset: Boolean = false,
+    failOnUnknownTypes: Boolean = false,
 ) :
     BasicFunctionalityIntegrationTest(
         S3V2TestUtils.getConfig(path),
@@ -40,6 +41,8 @@ abstract class S3V2WriteTest(
         commitDataIncrementally = commitDataIncrementally,
         allTypesBehavior = allTypesBehavior,
         nullEqualsUnset = nullEqualsUnset,
+        supportFileTransfer = true,
+        failOnUnknownTypes = failOnUnknownTypes,
     ) {
     @Disabled("Irrelevant for file destinations")
     @Test
@@ -65,6 +68,11 @@ class S3V2WriteTestJsonUncompressed :
     @Test
     override fun testInterruptedTruncateWithPriorData() {
         super.testInterruptedTruncateWithPriorData()
+    }
+
+    @Test
+    override fun testBasicTypes() {
+        super.testBasicTypes()
     }
 }
 
@@ -143,6 +151,7 @@ class S3V2WriteTestAvroUncompressed :
         preserveUndeclaredFields = false,
         allTypesBehavior = StronglyTyped(integerCanBeLarge = false),
         nullEqualsUnset = true,
+        failOnUnknownTypes = true,
     )
 
 class S3V2WriteTestAvroBzip2 :
@@ -153,6 +162,7 @@ class S3V2WriteTestAvroBzip2 :
         preserveUndeclaredFields = false,
         allTypesBehavior = StronglyTyped(integerCanBeLarge = false),
         nullEqualsUnset = true,
+        failOnUnknownTypes = true,
     )
 
 class S3V2WriteTestParquetUncompressed :
@@ -163,6 +173,7 @@ class S3V2WriteTestParquetUncompressed :
         preserveUndeclaredFields = false,
         allTypesBehavior = StronglyTyped(integerCanBeLarge = false),
         nullEqualsUnset = true,
+        failOnUnknownTypes = true,
     )
 
 class S3V2WriteTestParquetSnappy :
@@ -173,6 +184,7 @@ class S3V2WriteTestParquetSnappy :
         preserveUndeclaredFields = false,
         allTypesBehavior = StronglyTyped(integerCanBeLarge = false),
         nullEqualsUnset = true,
+        failOnUnknownTypes = true,
     )
 
 class S3V2WriteTestEndpointURL :

@@ -25,7 +25,7 @@ import io.airbyte.cdk.load.file.avro.toAvroWriter
 import io.airbyte.cdk.load.file.csv.toCsvPrinterWithHeader
 import io.airbyte.cdk.load.file.parquet.ParquetWriter
 import io.airbyte.cdk.load.file.parquet.toParquetWriter
-import io.airbyte.cdk.load.message.DestinationRecord
+import io.airbyte.cdk.load.message.DestinationRecordAirbyteValue
 import io.airbyte.cdk.load.util.serializeToString
 import io.airbyte.cdk.load.util.write
 import io.github.oshai.kotlinlogging.KotlinLogging
@@ -37,7 +37,8 @@ import java.io.OutputStream
 import org.apache.avro.Schema
 
 interface ObjectStorageFormattingWriter : Closeable {
-    fun accept(record: DestinationRecord)
+    fun accept(record: DestinationRecordAirbyteValue)
+    fun flush()
 }
 
 @Singleton
@@ -79,11 +80,15 @@ class JsonFormattingWriter(
     private val rootLevelFlattening: Boolean,
 ) : ObjectStorageFormattingWriter {
 
-    override fun accept(record: DestinationRecord) {
+    override fun accept(record: DestinationRecordAirbyteValue) {
         val data =
             record.dataWithAirbyteMeta(stream, rootLevelFlattening).toJson().serializeToString()
         outputStream.write(data)
         outputStream.write("\n")
+    }
+
+    override fun flush() {
+        outputStream.flush()
     }
 
     override fun close() {
@@ -99,10 +104,14 @@ class CSVFormattingWriter(
 
     private val finalSchema = stream.schema.withAirbyteMeta(rootLevelFlattening)
     private val printer = finalSchema.toCsvPrinterWithHeader(outputStream)
-    override fun accept(record: DestinationRecord) {
+    override fun accept(record: DestinationRecordAirbyteValue) {
         printer.printRecord(
             record.dataWithAirbyteMeta(stream, rootLevelFlattening).toCsvRecord(finalSchema)
         )
+    }
+
+    override fun flush() {
+        printer.flush()
     }
 
     override fun close() {
@@ -128,10 +137,14 @@ class AvroFormattingWriter(
         log.info { "Generated avro schema: $avroSchema" }
     }
 
-    override fun accept(record: DestinationRecord) {
+    override fun accept(record: DestinationRecordAirbyteValue) {
         val dataMapped = pipeline.map(record.data, record.meta?.changes)
         val withMeta = dataMapped.withAirbyteMeta(stream, record.emittedAtMs, rootLevelFlattening)
         writer.write(withMeta.toAvroRecord(mappedSchema, avroSchema))
+    }
+
+    override fun flush() {
+        writer.flush()
     }
 
     override fun close() {
@@ -157,10 +170,14 @@ class ParquetFormattingWriter(
         log.info { "Generated avro schema: $avroSchema" }
     }
 
-    override fun accept(record: DestinationRecord) {
+    override fun accept(record: DestinationRecordAirbyteValue) {
         val dataMapped = pipeline.map(record.data, record.meta?.changes)
         val withMeta = dataMapped.withAirbyteMeta(stream, record.emittedAtMs, rootLevelFlattening)
         writer.write(withMeta.toAvroRecord(mappedSchema, avroSchema))
+    }
+
+    override fun flush() {
+        // Parquet writer does not support flushing
     }
 
     override fun close() {
@@ -193,18 +210,23 @@ class BufferedFormattingWriter<T : OutputStream>(
     val bufferSize: Int
         get() = buffer.size()
 
-    override fun accept(record: DestinationRecord) {
+    override fun accept(record: DestinationRecordAirbyteValue) {
         writer.accept(record)
     }
 
-    fun takeBytes(): ByteArray {
+    fun takeBytes(): ByteArray? {
         wrappingBuffer.flush()
+        if (buffer.size() == 0) {
+            return null
+        }
+
         val bytes = buffer.toByteArray()
         buffer.reset()
         return bytes
     }
 
     fun finish(): ByteArray? {
+        writer.flush()
         writer.close()
         streamProcessor.partFinisher.invoke(wrappingBuffer)
         return if (buffer.size() > 0) {
@@ -212,6 +234,11 @@ class BufferedFormattingWriter<T : OutputStream>(
         } else {
             null
         }
+    }
+
+    override fun flush() {
+        writer.flush()
+        wrappingBuffer.flush()
     }
 
     override fun close() {
